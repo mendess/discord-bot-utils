@@ -1,0 +1,19 @@
+[package]
+name = "json-db"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log.workspace = true
+serde_json = "1"
+tempfile = "3"
+
+[dependencies.tokio]
+workspace = true
+features = ["sync", "parking_lot", "fs", "io-util"]
+
+[dependencies.serde]
+version = "1"
+features = ["derive"]

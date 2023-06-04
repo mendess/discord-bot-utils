@@ -1,0 +1,18 @@
+[workspace]
+members = [
+    "pubsub",
+    "json-db",
+    "daemons",
+]
+
+[workspace.dependencies]
+futures = "0.3"
+log = "0.4"
+
+[workspace.dependencies.tokio]
+version = "1"
+default-features = false
+
+[workspace.dependencies.serenity]
+version = "0.11"
+default-features = false
