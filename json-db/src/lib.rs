@@ -32,6 +32,13 @@ impl<T> GlobalDatabase<T, io::Error>
 where
     T: Serialize + DeserializeOwned + Default + Debug,
 {
+    pub const fn new(filename: &'static str) -> Self {
+        Self {
+            db: OnceCell::const_new(),
+            filename,
+        }
+    }
+
     pub async fn load(&self) -> io::Result<DbGuard<'_, T, io::Error>> {
         self.db
             .get_or_try_init(|| async { Database::new(self.filename).await })
@@ -74,7 +81,7 @@ impl<T, E: std::error::Error> Database<T, E> {
         let dir = filename
             .parent()
             .expect("databases have to point to normal files");
-        std::fs::create_dir_all(dir)?;
+        tokio::fs::create_dir_all(dir).await?;
         Ok(Self {
             filename: Mutex::new(filename),
             serializer: Box::new(move |w, t| serializer(w, t)),
