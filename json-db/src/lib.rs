@@ -1,4 +1,5 @@
 pub mod json_hash_map;
+pub mod multifile_db;
 
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
