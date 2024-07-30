@@ -155,10 +155,11 @@ where
                         let mut map = HashMap::default();
                         while let Some(d) = read_dir.next_entry().await? {
                             let path = d.path();
-                            let gid = match path.file_stem().and_then(|n| {
-                                let s = from_utf8(n.as_bytes()).ok()?;
-                                Fk::from_str(s).ok()
-                            }) {
+                            let key = path
+                                .file_stem()
+                                .and_then(|n| from_utf8(n.as_bytes()).ok())
+                                .and_then(|n| Fk::from_str(n).ok());
+                            let gid = match key {
                                 None => continue,
                                 Some(gid) => gid,
                             };

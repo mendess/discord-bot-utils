@@ -84,7 +84,7 @@ where
 impl<F, Fut, T, const H: u32, const M: u32, const S: u32> Daemon<false> for Cron<F, Fut, T, H, M, S>
 where
     F: FnMut(&T) -> Fut + Send + Sync,
-    Fut: Future<Output = ControlFlow> + Send ,
+    Fut: Future<Output = ControlFlow> + Send,
     T: Send + Sync,
 {
     type Data = T;

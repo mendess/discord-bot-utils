@@ -4,6 +4,7 @@ pub mod multifile_db;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     fmt::Debug,
+    fs::Permissions,
     io::{self, Write},
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
@@ -22,27 +23,50 @@ pub struct Database<T, E: std::error::Error = io::Error> {
     filename: Mutex<PathBuf>,
     serializer: Serializer<T, E>,
     deserializer: Deserializer<T, E>,
+    permissions: Option<Permissions>,
 }
 
 pub struct GlobalDatabase<T, E: std::error::Error = io::Error> {
     db: OnceCell<Database<T, E>>,
     filename: &'static str,
+    permissions: Option<fn() -> Permissions>,
+}
+
+impl<T> GlobalDatabase<T, io::Error>
+where
+    T: Serialize + DeserializeOwned + Default,
+{
+    pub const fn new(filename: &'static str) -> Self {
+        Self {
+            db: OnceCell::const_new(),
+            filename,
+            permissions: None,
+        }
+    }
+
+    pub const fn new_with_perms(filename: &'static str, permissions: fn() -> Permissions) -> Self {
+        Self {
+            db: OnceCell::const_new(),
+            filename,
+            permissions: Some(permissions),
+        }
+    }
 }
 
 impl<T> GlobalDatabase<T, io::Error>
 where
     T: Serialize + DeserializeOwned + Default + Debug,
 {
-    pub const fn new(filename: &'static str) -> Self {
-        Self {
-            db: OnceCell::const_new(),
-            filename,
-        }
-    }
-
     pub async fn load(&self) -> io::Result<DbGuard<'_, T, io::Error>> {
         self.db
-            .get_or_try_init(|| async { Database::new(self.filename).await })
+            .get_or_try_init(|| async {
+                Database::new(self.filename).await.map(|mut d| {
+                    if let Some(perm) = self.permissions {
+                        d.set_permissions(perm())
+                    }
+                    d
+                })
+            })
             .await?
             .load()
             .await
@@ -57,13 +81,6 @@ impl<T: DeserializeOwned + Serialize> Database<T, io::Error> {
             |s| serde_json::from_slice(s).map_err(Into::into),
         )
         .await
-    }
-
-    pub const fn const_new(filename: &'static str) -> GlobalDatabase<T> {
-        GlobalDatabase {
-            db: OnceCell::const_new(),
-            filename,
-        }
     }
 }
 
@@ -87,7 +104,12 @@ impl<T, E: std::error::Error> Database<T, E> {
             filename: Mutex::new(filename),
             serializer: Box::new(move |w, t| serializer(w, t)),
             deserializer: Box::new(move |slice| deserializer(slice)),
+            permissions: None,
         })
+    }
+
+    pub fn set_permissions(&mut self, permissions: Permissions) {
+        self.permissions = Some(permissions);
     }
 }
 
@@ -106,6 +128,7 @@ where
                     serializer: &*self.serializer,
                     t: Default::default(),
                     save: true,
+                    permissions: self.permissions.as_ref(),
                 });
             }
             Err(e) => return Err(e.into()),
@@ -118,6 +141,7 @@ where
             serializer: &*self.serializer,
             t,
             save: true,
+            permissions: self.permissions.as_ref(),
         })
     }
 }
@@ -127,6 +151,7 @@ pub struct DbGuard<'db, T: Debug, E: std::error::Error> {
     serializer: &'db (dyn Fn(&mut dyn Write, &T) -> Result<(), E> + Send + Sync),
     t: T,
     save: bool,
+    permissions: Option<&'db Permissions>,
 }
 
 impl<'db, T: Debug, E: std::error::Error> Deref for DbGuard<'db, T, E> {
@@ -180,6 +205,14 @@ impl<'db, T: Debug, E: std::error::Error> Drop for DbGuard<'db, T, E> {
                     self.pathbuf.display(),
                     e
                 );
+            }
+            if let Some(perm) = self.permissions {
+                if let Err(e) = std::fs::set_permissions(&**self.pathbuf, perm.clone()) {
+                    log::error!(
+                        "Failed to set permissions for {} to {perm:?}: {e}",
+                        self.pathbuf.display()
+                    )
+                }
             }
         }
     }
