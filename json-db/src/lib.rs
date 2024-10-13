@@ -198,12 +198,13 @@ impl<'db, T: Debug, E: std::error::Error> Drop for DbGuard<'db, T, E> {
                     e,
                 );
             }
-            if let Err(e) = std::fs::rename(&temp_path, &**self.pathbuf) {
+            if let Err(tempfile::PathPersistError { error, path }) =
+                temp_path.persist(&**self.pathbuf)
+            {
                 log::error!(
-                    "Failed to rename '{}' to '{}': {}",
-                    temp_path.display(),
+                    "Failed to rename '{}' to '{}': {error}",
+                    path.display(),
                     self.pathbuf.display(),
-                    e
                 );
             }
             if let Some(perm) = self.permissions {

@@ -1,23 +1,22 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, option::Option};
 
 use crate::publish_with;
 
 use super::{events, publish};
 use serenity::{
-    client::{bridge::gateway::event::ShardStageUpdateEvent, Context, EventHandler},
-    json::Value,
+    all::{
+        CommandPermissions, Context, CurrentUser, EventHandler, GuildMemberUpdateEvent,
+        Interaction, ShardStageUpdateEvent,
+    },
     model::{
-        application::{command::CommandPermission, interaction::Interaction},
-        channel::{Channel, ChannelCategory, GuildChannel, PartialGuildChannel, StageInstance},
-        channel::{Message, Reaction},
+        channel::{GuildChannel, Message, PartialGuildChannel, Reaction, StageInstance},
         event::{
             ChannelPinsUpdateEvent, GuildMembersChunkEvent, GuildScheduledEventUserAddEvent,
             GuildScheduledEventUserRemoveEvent, InviteCreateEvent, InviteDeleteEvent,
             MessageUpdateEvent, ResumedEvent, ThreadListSyncEvent, ThreadMembersUpdateEvent,
             TypingStartEvent, VoiceServerUpdateEvent,
         },
-        gateway::Presence,
-        gateway::Ready,
+        gateway::{Presence, Ready},
         guild::{
             automod::{ActionExecution, Rule},
             Emoji, Guild, Integration, Member, PartialGuild, Role, ScheduledEvent, ThreadMember,
@@ -26,7 +25,7 @@ use serenity::{
         id::{ChannelId, EmojiId, GuildId, MessageId, RoleId, StickerId, UserId},
         prelude::{ApplicationId, IntegrationId},
         sticker::Sticker,
-        user::{CurrentUser, User},
+        user::User,
         voice::VoiceState,
     },
 };
@@ -44,11 +43,7 @@ impl Handler {
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
-    async fn application_command_permissions_update(
-        &self,
-        ctx: Context,
-        permission: CommandPermission,
-    ) {
+    async fn command_permissions_update(&self, ctx: Context, permission: CommandPermissions) {
         publish::<events::ApplicationCommandPermissionUpdate>(ctx, permission).await;
     }
 
@@ -73,34 +68,40 @@ impl EventHandler for Handler {
         publish::<events::CacheReady>(ctx, guilds).await;
     }
 
-    async fn channel_create(&self, ctx: Context, channel: &GuildChannel) {
+    async fn channel_create(&self, ctx: Context, channel: GuildChannel) {
         publish_with::<events::ChannelCreate>(ctx, || channel.clone()).await
     }
 
-    async fn category_create(&self, ctx: Context, category: &ChannelCategory) {
+    async fn category_create(&self, ctx: Context, category: GuildChannel) {
         publish_with::<events::CategoryCreate>(ctx, || category.clone()).await
     }
 
-    async fn category_delete(&self, ctx: Context, category: &ChannelCategory) {
+    async fn category_delete(&self, ctx: Context, category: GuildChannel) {
         publish_with::<events::CategoryDelete>(ctx, || category.clone()).await;
     }
 
-    async fn channel_delete(&self, ctx: Context, channel: &GuildChannel) {
-        publish_with::<events::ChannelDelete>(ctx, || channel.clone()).await;
+    async fn channel_delete(
+        &self,
+        ctx: Context,
+        channel: GuildChannel,
+        messages: Option<Vec<Message>>,
+    ) {
+        publish::<events::ChannelDelete>(
+            ctx,
+            events::ChannelDelete {
+                channel: channel.clone(),
+                messages: messages.clone(),
+            },
+        )
+        .await;
     }
 
     async fn channel_pins_update(&self, ctx: Context, pin: ChannelPinsUpdateEvent) {
         publish::<events::ChannelPinsUpdate>(ctx, pin).await;
     }
 
-    #[cfg(feature = "serenity_cache")]
-    async fn channel_update(&self, ctx: Context, old: Option<Channel>, new: Channel) {
+    async fn channel_update(&self, ctx: Context, old: Option<GuildChannel>, new: GuildChannel) {
         publish::<events::ChannelUpdate>(ctx, events::ChannelUpdate { old, new }).await;
-    }
-
-    #[cfg(not(feature = "serenity_cache"))]
-    async fn channel_update(&self, ctx: Context, new: Channel) {
-        publish::<events::ChannelUpdate>(ctx, events::ChannelUpdate { new }).await;
     }
 
     async fn guild_ban_addition(&self, ctx: Context, guild_id: GuildId, banned_user: User) {
@@ -125,24 +126,12 @@ impl EventHandler for Handler {
         .await;
     }
 
-    #[cfg(feature = "serenity_cache")]
-    async fn guild_create(&self, ctx: Context, guild: Guild, is_new: bool) {
+    async fn guild_create(&self, ctx: Context, guild: Guild, is_new: Option<bool>) {
         publish::<events::GuildCreate>(ctx, events::GuildCreate { guild, is_new }).await;
     }
 
-    #[cfg(not(feature = "serenity_cache"))]
-    async fn guild_create(&self, ctx: Context, guild: Guild) {
-        publish::<events::GuildCreate>(ctx, events::GuildCreate { guild }).await;
-    }
-
-    #[cfg(feature = "serenity_cache")]
     async fn guild_delete(&self, ctx: Context, incomplete: UnavailableGuild, full: Option<Guild>) {
         publish::<events::GuildDelete>(ctx, events::GuildDelete { incomplete, full }).await;
-    }
-
-    #[cfg(not(feature = "serenity_cache"))]
-    async fn guild_delete(&self, ctx: Context, incomplete: UnavailableGuild) {
-        publish::<events::GuildDelete>(ctx, events::GuildDelete { incomplete }).await;
     }
 
     async fn guild_emojis_update(
@@ -169,7 +158,6 @@ impl EventHandler for Handler {
         publish::<events::GuildMemberAddition>(ctx, new_member).await;
     }
 
-    #[cfg(feature = "serenity_cache")]
     async fn guild_member_removal(
         &self,
         ctx: Context,
@@ -188,24 +176,19 @@ impl EventHandler for Handler {
         .await;
     }
 
-    #[cfg(not(feature = "serenity_cache"))]
-    async fn guild_member_removal(&self, ctx: Context, guild_id: GuildId, user: User) {
-        publish::<events::GuildMemberRemoval>(ctx, events::GuildMemberRemoval { guild_id, user })
-            .await;
-    }
-
-    #[cfg(feature = "serenity_cache")]
     async fn guild_member_update(
         &self,
         ctx: Context,
         old_if_available: Option<Member>,
-        new: Member,
+        new: Option<Member>,
+        event: GuildMemberUpdateEvent,
     ) {
         publish::<events::GuildMemberUpdate>(
             ctx,
             events::GuildMemberUpdate {
                 old_if_available,
                 new,
+                event,
             },
         )
         .await;
@@ -219,7 +202,6 @@ impl EventHandler for Handler {
         publish::<events::GuildRoleCreate>(ctx, new).await;
     }
 
-    #[cfg(feature = "serenity_cache")]
     async fn guild_role_delete(
         &self,
         ctx: Context,
@@ -238,19 +220,6 @@ impl EventHandler for Handler {
         .await;
     }
 
-    #[cfg(not(feature = "serenity_cache"))]
-    async fn guild_role_delete(&self, ctx: Context, guild_id: GuildId, removed_role_id: RoleId) {
-        publish::<events::GuildRoleDelete>(
-            ctx,
-            events::GuildRoleDelete {
-                guild_id,
-                removed_role_id,
-            },
-        )
-        .await;
-    }
-
-    #[cfg(feature = "serenity_cache")]
     async fn guild_role_update(
         &self,
         ctx: Context,
@@ -283,11 +252,6 @@ impl EventHandler for Handler {
         .await;
     }
 
-    async fn guild_unavailable(&self, ctx: Context, guild_id: GuildId) {
-        publish::<events::GuildUnavailable>(ctx, guild_id).await;
-    }
-
-    #[cfg(feature = "serenity_cache")]
     async fn guild_update(
         &self,
         ctx: Context,
@@ -302,11 +266,6 @@ impl EventHandler for Handler {
             },
         )
         .await;
-    }
-
-    #[cfg(not(feature = "serenity_cache"))]
-    async fn guild_update(&self, ctx: Context, new_but_incomplete: PartialGuild) {
-        publish::<events::GuildUpdate>(ctx, events::GuildUpdate { new_but_incomplete }).await;
     }
 
     async fn invite_create(&self, ctx: Context, data: InviteCreateEvent) {
@@ -361,7 +320,6 @@ impl EventHandler for Handler {
         .await;
     }
 
-    #[cfg(feature = "serenity_cache")]
     async fn message_update(
         &self,
         ctx: Context,
@@ -379,13 +337,6 @@ impl EventHandler for Handler {
                 },
             )
             .await;
-        }
-    }
-
-    #[cfg(not(feature = "serenity_cache"))]
-    async fn message_update(&self, ctx: Context, new_data: MessageUpdateEvent) {
-        if new_data.author.as_ref().map(|u| u.id) != self.0 {
-            publish::<events::MessageUpdate>(ctx, events::MessageUpdate { event: new_data }).await;
         }
     }
 
@@ -441,32 +392,16 @@ impl EventHandler for Handler {
         publish::<events::TypingStart>(ctx, event).await;
     }
 
-    async fn unknown(&self, ctx: Context, name: String, raw: Value) {
-        publish::<events::Unknwon>(ctx, events::Unknwon { name, raw }).await;
-    }
-
-    #[cfg(feature = "serenity_cache")]
-    async fn user_update(&self, ctx: Context, old_data: CurrentUser, new: CurrentUser) {
+    async fn user_update(&self, ctx: Context, old_data: Option<CurrentUser>, new: CurrentUser) {
         publish::<events::UserUpdate>(ctx, events::UserUpdate { old_data, new }).await
-    }
-
-    #[cfg(not(feature = "serenity_cache"))]
-    async fn user_update(&self, ctx: Context, new: CurrentUser) {
-        publish::<events::UserUpdate>(ctx, events::UserUpdate { new }).await
     }
 
     async fn voice_server_update(&self, ctx: Context, event: VoiceServerUpdateEvent) {
         publish::<events::VoiceServerUpdate>(ctx, event).await;
     }
 
-    #[cfg(feature = "serenity_cache")]
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
         publish::<events::VoiceStateUpdate>(ctx, events::VoiceStateUpdate { new, old }).await;
-    }
-
-    #[cfg(not(feature = "serenity_cache"))]
-    async fn voice_state_update(&self, ctx: Context, new: VoiceState) {
-        publish::<events::VoiceStateUpdate>(ctx, events::VoiceStateUpdate { new }).await;
     }
 
     async fn webhook_update(
@@ -531,12 +466,24 @@ impl EventHandler for Handler {
         publish::<events::ThreadCreate>(ctx, thread).await;
     }
 
-    async fn thread_update(&self, ctx: Context, thread: GuildChannel) {
-        publish::<events::ThreadUpdate>(ctx, thread).await;
+    async fn thread_update(&self, ctx: Context, old: Option<GuildChannel>, new: GuildChannel) {
+        publish::<events::ThreadUpdate>(ctx, events::ThreadUpdate { old, new }).await;
     }
 
-    async fn thread_delete(&self, ctx: Context, thread: PartialGuildChannel) {
-        publish::<events::ThreadDelete>(ctx, thread).await
+    async fn thread_delete(
+        &self,
+        ctx: Context,
+        thread: PartialGuildChannel,
+        full_thread_data: Option<GuildChannel>,
+    ) {
+        publish::<events::ThreadDelete>(
+            ctx,
+            events::ThreadDelete {
+                thread,
+                full_thread_data,
+            },
+        )
+        .await
     }
 
     async fn thread_list_sync(&self, ctx: Context, thread_list_sync: ThreadListSyncEvent) {

@@ -7,12 +7,10 @@ use std::collections::HashMap;
 
 use super::Event;
 use serenity::{
-    client::bridge::gateway::event::ShardStageUpdateEvent,
+    all::{CommandPermissions, GuildMemberUpdateEvent, Interaction, ShardStageUpdateEvent},
     json::Value,
     model::{
-        application::{command::CommandPermission, interaction::Interaction},
-        channel::Reaction,
-        channel::{Channel, ChannelCategory, GuildChannel, PartialGuildChannel, StageInstance},
+        channel::{GuildChannel, PartialGuildChannel, Reaction, StageInstance},
         event::{
             ChannelPinsUpdateEvent, GuildMembersChunkEvent, GuildScheduledEventUserAddEvent,
             GuildScheduledEventUserRemoveEvent, InviteCreateEvent, InviteDeleteEvent,
@@ -73,32 +71,32 @@ macro_rules! events {
 }
 
 events! {
-    ApplicationCommandPermissionUpdate => CommandPermission,
+    ApplicationCommandPermissionUpdate => CommandPermissions,
     AutoModerationRuleCreate => Rule,
     AutoModerationRuleUpdate => Rule,
     AutoModerationRuleDelete => Rule,
     AutoModerationActionExecution => ActionExecution,
     CacheReady => Vec<GuildId>,
     ChannelCreate => GuildChannel,
-    CategoryCreate => ChannelCategory,
-    CategoryDelete => ChannelCategory,
-    ChannelDelete => GuildChannel,
+    CategoryCreate => GuildChannel,
+    CategoryDelete => GuildChannel,
+    ChannelDelete => {
+        channel: GuildChannel,
+        messages: Option<Vec<serenity::model::channel::Message>>
+    },
     ChannelPinsUpdate => ChannelPinsUpdateEvent,
     ChannelUpdate => {
-        #[cfg(feature = "serenity_cache")]
-        old: Option<Channel>,
-        new: Channel
+        old: Option<GuildChannel>,
+        new: GuildChannel
     },
     GuildBanAddition => { guild_id: GuildId, banned_user: User },
     GuildBanRemoval => { guild_id: GuildId, unbanned_user: User },
     GuildCreate => {
         guild: Guild,
-        #[cfg(feature = "serenity_cache")]
-        is_new: bool
+        is_new: Option<bool>
     },
     GuildDelete => {
         incomplete: UnavailableGuild,
-        #[cfg(feature = "serenity_cache")]
         full: Option<Guild>,
     },
     GuildEmojisUpdate => { guild_id: GuildId, current_state: HashMap<EmojiId, Emoji> },
@@ -107,23 +105,24 @@ events! {
     GuildMemberRemoval => {
         guild_id: GuildId,
         user: User,
-        #[cfg(feature = "serenity_cache")]
         member_data_if_available: Option<Member>
     },
-    GuildMemberUpdate => { old_if_available: Option<Member>, new: Member },
+    GuildMemberUpdate => {
+        old_if_available: Option<Member>,
+        new: Option<Member>,
+        event: GuildMemberUpdateEvent,
+    },
     GuildMembersChunk => GuildMembersChunkEvent,
     GuildRoleCreate => Role,
     GuildRoleDelete => {
         guild_id: GuildId,
         removed_role_id: RoleId,
-        #[cfg(feature = "serenity_cache")]
         removed_role_data_if_available: Option<Role>,
     },
     GuildRoleUpdate => { old_data_if_available: Option<Role>, new: Role, },
     GuildStickersUpdate => { guild_id: GuildId, current_state: HashMap<StickerId, Sticker>, },
     GuildUnavailable => GuildId,
     GuildUpdate => {
-        #[cfg(feature = "serenity_cache")]
         old_data_if_available: Option<Guild>,
         new_but_incomplete: PartialGuild,
     },
@@ -141,9 +140,7 @@ events! {
         guild_id: Option<GuildId>,
     },
     MessageUpdate => {
-        #[cfg(feature = "serenity_cache")]
         old_if_available: Option<serenity::model::channel::Message>,
-        #[cfg(feature = "serenity_cache")]
         new: Option<serenity::model::channel::Message>,
         event: MessageUpdateEvent,
     },
@@ -157,13 +154,11 @@ events! {
     ShardStageUpdate => ShardStageUpdateEvent,
     TypingStart => TypingStartEvent,
     UserUpdate => {
-        #[cfg(feature = "serenity_cache")]
-        old_data: CurrentUser,
+        old_data: Option<CurrentUser>,
         new: CurrentUser,
     },
     VoiceServerUpdate => VoiceServerUpdateEvent,
     VoiceStateUpdate => {
-        #[cfg(feature = "serenity_cache")]
         old: Option<VoiceState>,
         new: VoiceState,
     },
@@ -180,8 +175,14 @@ events! {
     StageInstanceUpdate => StageInstance,
     StageInstanceDelete => StageInstance,
     ThreadCreate => GuildChannel,
-    ThreadUpdate => GuildChannel,
-    ThreadDelete => PartialGuildChannel,
+    ThreadUpdate => {
+        old: Option<GuildChannel>,
+        new: GuildChannel,
+    },
+    ThreadDelete => {
+        thread: PartialGuildChannel,
+        full_thread_data: Option<GuildChannel>,
+    },
     ThreadListSync => ThreadListSyncEvent,
     ThreadMemberUpdate => ThreadMember,
     ThreadMembersUpdate => ThreadMembersUpdateEvent,

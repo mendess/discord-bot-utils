@@ -1,5 +1,7 @@
 use std::{
+    any::type_name,
     collections::{hash_map::Entry, HashMap},
+    fmt::Debug,
     future::Future,
     hash::Hash,
     io,
@@ -86,7 +88,7 @@ impl<T, E: std::error::Error> Deref for DatabaseGuard<'_, T, E> {
 
 impl<Pk, Fk, T, E> MultifileDb<Pk, Fk, T, E>
 where
-    Pk: Eq + Hash + Copy,
+    Pk: Eq + Hash + Copy + Debug,
     Fk: FileKeySerializer<Pk>,
     T: 'static,
     E: From<io::Error> + From<Fk::ParseError> + std::error::Error + 'static,
@@ -163,6 +165,10 @@ where
                                 None => continue,
                                 Some(gid) => gid,
                             };
+                            log::debug!(
+                                "loaded {gid:?} -> {path:?} into db {}",
+                                type_name::<Self>()
+                            );
                             map.insert(
                                 gid,
                                 Database::with_ser_and_deser(
@@ -186,7 +192,7 @@ where
 
 impl<Pk, Fk, T, E> MultifileDb<Pk, Fk, T, E>
 where
-    Pk: Eq + Hash + Copy,
+    Pk: Eq + Hash + Copy + Debug,
     Fk: FileKeySerializer<Pk>,
     T: 'static,
     E: From<io::Error> + From<Fk::ParseError> + std::error::Error + 'static,
