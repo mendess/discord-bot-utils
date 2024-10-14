@@ -4,11 +4,13 @@ members = [
     "pubsub",
     "json-db",
     "daemons",
+    "bot-api-types",
 ]
 
 [workspace.dependencies]
 futures = "0.3"
 log = "0.4"
+serde = "1"
 
 [workspace.dependencies.tokio]
 version = "1"
