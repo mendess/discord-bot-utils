@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{
     any::type_name,
     collections::{hash_map::Entry, HashMap},
@@ -9,7 +10,7 @@ use std::{
     ops::Deref,
     os::unix::prelude::OsStrExt,
     path::PathBuf,
-    str::from_utf8,
+    str::{from_utf8, FromStr},
 };
 
 use serde::{de::DeserializeOwned, Serialize};
@@ -30,7 +31,26 @@ pub trait FileKeySerializer<Pk> {
     fn from_str(s: &str) -> Result<Pk, Self::ParseError>;
 }
 
-pub struct MultifileDb<Pk, FK, T, E: std::error::Error = io::Error> {
+impl<Pk> FileKeySerializer<Pk> for Pk
+where
+    Pk: fmt::Display,
+    Pk: FromStr<Err: std::error::Error + Send + Sync + 'static>,
+{
+    type ParseError = io::Error;
+
+    fn to_string(pk: Pk) -> String {
+        format!("{pk}.json")
+    }
+
+    fn from_str(s: &str) -> Result<Pk, Self::ParseError> {
+        s.strip_suffix(".json")
+            .ok_or_else(|| io::Error::other(format!("not json: {s}")))?
+            .parse()
+            .map_err(io::Error::other)
+    }
+}
+
+pub struct MultifileDb<Pk, T, FK = Pk, E: std::error::Error = io::Error> {
     dir: PathBuf,
     table: OnceCell<Mutex<HashMap<Pk, Database<T, E>>>>,
     new_serializer: SerializerProducer<T, E>,
@@ -38,7 +58,7 @@ pub struct MultifileDb<Pk, FK, T, E: std::error::Error = io::Error> {
     _marker: PhantomData<FK>,
 }
 
-impl<Pk, Fk, T> MultifileDb<Pk, Fk, T>
+impl<Pk, T> MultifileDb<Pk, T>
 where
     T: Serialize + DeserializeOwned + 'static,
 {
@@ -51,15 +71,15 @@ where
     }
 }
 
-impl<Pk, Fk, T, E> MultifileDb<Pk, Fk, T, E>
+impl<Pk, T, Fk, E> MultifileDb<Pk, T, Fk, E>
 where
     E: From<io::Error> + std::error::Error + 'static,
     T: 'static,
 {
     pub fn new_with_ser_and_deser<P>(
         base_dir: P,
-        new_serializer: fn() -> Serializer<T, E>,
-        new_deserializer: fn() -> Deserializer<T, E>,
+        new_serializer: SerializerProducer<T, E>,
+        new_deserializer: DeserializerProducer<T, E>,
     ) -> Self
     where
         P: Into<PathBuf>,
@@ -86,7 +106,7 @@ impl<T, E: std::error::Error> Deref for DatabaseGuard<'_, T, E> {
     }
 }
 
-impl<Pk, Fk, T, E> MultifileDb<Pk, Fk, T, E>
+impl<Pk, T, Fk, E> MultifileDb<Pk, T, Fk, E>
 where
     Pk: Eq + Hash + Copy + Debug,
     Fk: FileKeySerializer<Pk>,
@@ -190,7 +210,7 @@ where
     }
 }
 
-impl<Pk, Fk, T, E> MultifileDb<Pk, Fk, T, E>
+impl<Pk, T, Fk, E> MultifileDb<Pk, T, Fk, E>
 where
     Pk: Eq + Hash + Copy + Debug,
     Fk: FileKeySerializer<Pk>,
