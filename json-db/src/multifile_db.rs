@@ -178,7 +178,7 @@ where
                         while let Some(d) = read_dir.next_entry().await? {
                             let path = d.path();
                             let key = path
-                                .file_stem()
+                                .file_name()
                                 .and_then(|n| from_utf8(n.as_bytes()).ok())
                                 .and_then(|n| Fk::from_str(n).ok());
                             let gid = match key {

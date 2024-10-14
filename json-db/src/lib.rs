@@ -1,6 +1,7 @@
 pub mod json_hash_map;
 pub mod multifile_db;
 
+use core::fmt;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     fmt::Debug,
@@ -26,6 +27,24 @@ pub struct Database<T, E: std::error::Error = io::Error> {
     permissions: Option<Permissions>,
 }
 
+impl<T, E: std::error::Error> fmt::Debug for Database<T, E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            filename,
+            serializer: _,
+            deserializer: _,
+            permissions,
+        } = self;
+        f.debug_struct("Database")
+            .field("filename", filename)
+            .field("permissions", permissions)
+            .field("serializer", &"fn")
+            .field("deserializer", &"fn")
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct GlobalDatabase<T, E: std::error::Error = io::Error> {
     db: OnceCell<Database<T, E>>,
     filename: &'static str,
