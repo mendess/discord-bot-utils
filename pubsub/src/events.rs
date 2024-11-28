@@ -50,6 +50,8 @@ macro_rules! events {
         }
         impl Event for $event {
             type Argument = $event;
+
+            $crate::impl_event_container!($event);
         }
 
         $(events! { $($rest)* })?
@@ -62,6 +64,8 @@ macro_rules! events {
         pub struct $event;
         impl Event for $event {
             type Argument = $arg;
+
+            $crate::impl_event_container!($arg);
         }
 
         $(events! { $($rest)* })?
