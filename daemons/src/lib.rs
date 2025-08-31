@@ -5,13 +5,11 @@
 
 //! An implementation of background tasks.
 
-mod control_flow;
 #[cfg(feature = "cron")]
 pub mod cron;
 mod monomorphise;
 
 pub use async_trait::async_trait;
-pub use control_flow::ControlFlow;
 use futures::future::OptionFuture as OptFut;
 use std::{
     any::{type_name, TypeId},
@@ -30,6 +28,9 @@ use tokio::{
     },
     time::timeout,
 };
+
+/// Control flow alias from stdlib that hardcodes () for both break and continue;
+pub type ControlFlow = std::ops::ControlFlow<(), ()>;
 
 /// A Daemon, daemons run at specified intervals (or when asked to) until they return
 /// [ControlFlow::Break].
@@ -321,7 +322,7 @@ mod test {
             }
 
             async fn run(&mut self, _: &Self::Data) -> ControlFlow {
-                ControlFlow::BREAK
+                ControlFlow::Break(())
             }
         }
 

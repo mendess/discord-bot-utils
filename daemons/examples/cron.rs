@@ -9,7 +9,7 @@ impl Daemon<false> for Foo {
     type Data = ();
     async fn run(&mut self, _: &Self::Data) -> ControlFlow {
         log::info!("{:?} ola", Utc::now());
-        ControlFlow::CONTINUE
+        ControlFlow::Continue(())
     }
 
     async fn interval(&self) -> Duration {

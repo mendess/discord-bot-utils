@@ -1,7 +1,6 @@
 pub mod event_handler;
 pub mod events;
 
-pub use daemons::ControlFlow;
 use futures::future::BoxFuture;
 use serenity::{
     client::Context,
@@ -10,8 +9,10 @@ use serenity::{
 use std::{
     any::{type_name, Any, TypeId},
     collections::{hash_map::Entry, HashMap},
-    sync::{Arc, OnceLock},
+    sync::{Arc, LazyLock},
 };
+
+pub type ControlFlow = std::ops::ControlFlow<(), ()>;
 
 type Argument = dyn Any + Send + Sync;
 
@@ -25,7 +26,8 @@ pub trait Event: Any {
     type Argument: Any + Send + Sync;
 }
 
-static EVENT_HANDLERS: OnceLock<RwLock<HashMap<TypeId, Arc<Mutex<Subscribers>>>>> = OnceLock::new();
+static EVENT_HANDLERS: LazyLock<RwLock<HashMap<TypeId, Arc<Mutex<Subscribers>>>>> =
+    LazyLock::new(Default::default);
 
 /// Subscribe to an event of type `T`. See [events].
 pub async fn subscribe<T, F>(mut f: F)
@@ -44,12 +46,7 @@ where
     let callback: Box<Callback> = Box::new(move |ctx: &Context, any: &Argument| {
         f(ctx, any.downcast_ref::<T::Argument>().unwrap())
     });
-    match EVENT_HANDLERS
-        .get_or_init(Default::default)
-        .write()
-        .await
-        .entry(TypeId::of::<T>())
-    {
+    match EVENT_HANDLERS.write().await.entry(TypeId::of::<T>()) {
         Entry::Occupied(subs) => subs.get().lock().await.push(callback),
         Entry::Vacant(subs) => {
             subs.insert(Arc::new(Mutex::new(vec![callback])));
@@ -59,12 +56,7 @@ where
 
 pub(crate) async fn publish_with<T: Event>(ctx: Context, arg: impl FnOnce() -> T::Argument) {
     let mut to_remove = vec![];
-    let subscribers = EVENT_HANDLERS
-        .get_or_init(Default::default)
-        .read()
-        .await
-        .get(&TypeId::of::<T>())
-        .cloned();
+    let subscribers = EVENT_HANDLERS.read().await.get(&TypeId::of::<T>()).cloned();
     if let Some(subscribers) = subscribers {
         let arg = arg();
         tokio::spawn(async move {

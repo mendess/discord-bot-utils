@@ -19,9 +19,9 @@ impl Daemon<false> for Foo {
         println!("{:?} ola", Utc::now());
         self.0 += 1;
         if self.0 == 10 {
-            ControlFlow::BREAK
+            ControlFlow::Break(())
         } else {
-            ControlFlow::CONTINUE
+            ControlFlow::Continue(())
         }
     }
 }
