@@ -3,7 +3,7 @@
 //! A [`Cron`] is a special kind of task that never terminates and run at a configured interval.
 
 use super::{ControlFlow, Daemon};
-use chrono::{NaiveDateTime, NaiveTime, Utc};
+use chrono::{Local, NaiveDateTime, NaiveTime};
 use futures::Future;
 use std::marker::PhantomData;
 
@@ -90,7 +90,7 @@ where
     type Data = T;
 
     async fn interval(&self) -> std::time::Duration {
-        let now = Utc::now().naive_utc();
+        let now = Local::now().naive_utc();
         let h_m_s = NaiveTime::from_hms_opt(H, M, S).expect("valid h m s");
         let mut target = NaiveDateTime::new(now.date(), h_m_s);
         if now > target {
