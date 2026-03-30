@@ -3,7 +3,7 @@ pub mod events;
 
 use crate::event_handler::Context;
 use futures::future::BoxFuture;
-use serenity::prelude::{Mutex, RwLock};
+use serenity::prelude::{Mutex, RwLock, TypeMapKey};
 use std::{
     any::{type_name, Any, TypeId},
     collections::{hash_map::Entry, HashMap},
@@ -24,12 +24,18 @@ pub trait Event: Any {
     type Argument: Any + Send + Sync;
 }
 
-pub struct EventBus<S> {
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EmptyState;
+impl TypeMapKey for EmptyState {
+    type Value = ();
+}
+
+pub struct EventBus<S: TypeMapKey = EmptyState> {
     #[allow(clippy::type_complexity)]
     handlers: LazyLock<RwLock<HashMap<TypeId, Arc<Mutex<Subscribers<S>>>>>>,
 }
 
-impl<S: Send + Sync + 'static> EventBus<S> {
+impl<S: TypeMapKey + Send + Sync + 'static> EventBus<S> {
     pub const fn new() -> Self {
         Self {
             handlers: LazyLock::new(Default::default),
@@ -93,7 +99,7 @@ impl<S: Send + Sync + 'static> EventBus<S> {
     }
 }
 
-impl<S: Send + Sync + 'static> Default for EventBus<S> {
+impl<S: TypeMapKey + Send + Sync + 'static> Default for EventBus<S> {
     fn default() -> Self {
         Self::new()
     }
